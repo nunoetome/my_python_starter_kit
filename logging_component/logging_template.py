@@ -9,19 +9,9 @@ Este módulo disponibiliza uma configuração reutilizável de logging com:
 Baseado em: https://github.com/nunoetome/my_python_starter_kit
 
 Changelog:
-- 2026-06-19 | Nuno Tomé | versão 2.1 — Adicionado livro de etilo de logs para AI e humanos
+- 2026-06-19 | Nuno Tomé | versão 2.1 — Adicionado livro de estilo de logs para AI e humanos
 - 2026-06-02 | Nuno Tomé | versão 2.0 — RotatingFileHandler, docstrings PEP 257, setup_logging()
-- 2026-06-02 | Nuno Tomé | adicionado RotatingFileHandler com rotação por tamanho/registos
-- 2026-06-02 | Nuno Tomé | adicionadas variáveis globais LOG_MAX_BYTES, LOG_MAX_RECORDS, LOG_MAX_BACKUP
-- 2026-06-02 | Nuno Tomé | adicionada função setup_logging(); ini_logging mantida como legacy
-- 2026-06-02 | Nuno Tomé | removido import inspect não utilizado
-- 2026-06-02 | Nuno Tomé | substituído block comment por module docstring (PEP 257)
 - 2025-01-22 | Nuno Tomé | implementação do UTF-8 na escrita dos ficheiros de log
-- 2025-01-06 | Nuno Tomé | adaptado ao projeto Base.gov.pt
-- 2025-01-06 | Nuno Tomé | adaptado ao projeto EQS
-- 2025-08-23 | Nuno Tomé | versão 1.0
-- 2024-10-07 | Nuno Tomé | versão beta final
-- 2024-10-06 | Nuno Tomé | versão alpha final
 """
 
 import logging
@@ -37,8 +27,8 @@ LOG_LEVEL_CONSOLE = logging.INFO
 
 # --- Caminhos e prefixo ----------------------------------------------------
 LOG_FOLDER = 'log_files'
-LOG_OUTPUT_FILE = os.path.join(LOG_FOLDER, 'extrair_anuncios.log')
-LOG_OUTPUT_PREFIX = '<<eqs>>'
+LOG_OUTPUT_FILE = os.path.join(LOG_FOLDER, 'app.log')
+LOG_OUTPUT_PREFIX = '<<app>>'
 
 # --- Formatos --------------------------------------------------------------
 LOG_FORMAT_FILE = (
@@ -79,12 +69,12 @@ class RotatingFileHandler(logging.Handler):
     cascata (logrotate-style) até ao número máximo de arquivos definido
     em LOG_MAX_BACKUP.
 
-    Arquivos gerados::
+     Arquivos gerados::
 
-        extrair_anuncios.log       ← ficheiro de escrita atual
-        extrair_anuncios_1.log     ← arquivo mais recente
-        extrair_anuncios_2.log     ← ...
-        extrair_anuncios_N.log     ← arquivo mais antigo (removido no próximo ciclo)
+         app.log       ← ficheiro de escrita atual
+         app_1.log     ← arquivo mais recente
+         app_2.log     ← ...
+         app_N.log     ← arquivo mais antigo (removido no próximo ciclo)
     """
 
     def __init__(self, filename, mode='a', encoding=None,
@@ -171,6 +161,8 @@ def ini_logging():
     Mantida apenas para retrocompatibilidade. Para novos desenvolvimentos
     use :func:`setup_logging`.
     """
+    if LOGGER.hasHandlers():
+        LOGGER.handlers.clear()
     LOGGER.setLevel(LOG_LEVEL_GLOBAL)
 
     # FILE HANDLER
@@ -520,34 +512,34 @@ def setup_logging():
 # terá o seguinte aspecto (assumindo o prefixo e formato base já
 # configurados no logger):
 #
-#   <<eqs>> 2025-06-18 10:00:01 - __main__ - INFO - ===================================================
-#   <<eqs>> 2025-06-18 10:00:01 - __main__ - INFO - ============== AppX v1.0 a iniciar ===============
-#   <<eqs>> 2025-06-18 10:00:01 - __main__ - INFO - ===================================================
-#   <<eqs>> 2025-06-18 10:00:02 - __main__ - INFO - ---------------------------------------------------
-#   <<eqs>> 2025-06-18 10:00:02 - __main__ - INFO - ---------------- Processar PDFs ------------------
-#   <<eqs>> 2025-06-18 10:00:02 - __main__ - INFO - ---------------------------------------------------
-#   <<eqs>> 2025-06-18 10:00:03 - __main__ - DEBUG - ~~~~~~~~~~~~~~~~~ init_database() ~~~~~~~~~~~~~~~~~~
-#   <<eqs>> 2025-06-18 10:00:03 - __main__ - INFO - [pdf] A processar documento 1
-#   <<eqs>> 2025-06-18 10:00:04 - __main__ - INFO - [pdf] A processar documento 2
-#   <<eqs>> 2025-06-18 10:00:04 - __main__ - DEBUG - ---------------------------------------------------
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - [pdf] Documento 1 convertido com sucesso
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - [pdf] Documento 2 convertido com sucesso
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - DEBUG - [pdf] render_page() -> 0.12s
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------------------------------------------
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - | Resumo do processamento                         |
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - |-------------------------------------------------|
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - | Documentos processados  : 2                     |
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - | Sucesso                 : 2                     |
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - | Erros                   : 0                     |
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------------------------------------------
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - Processar PDFs concluído em 12.40s (2 documentos)
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------------------------------------------
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------- Fim Processar PDFs ---------------
-#   <<eqs>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------------------------------------------
-#   <<eqs>> 2025-06-18 10:00:06 - __main__ - INFO - Aplicação concluída em 12.85s
-#   <<eqs>> 2025-06-18 10:00:06 - __main__ - INFO - ===================================================
-#   <<eqs>> 2025-06-18 10:00:06 - __main__ - INFO - ============== AppX v1.0 finalizado ===============
-#   <<eqs>> 2025-06-18 10:00:06 - __main__ - INFO - ===================================================
+#   <<app>> 2025-06-18 10:00:01 - __main__ - INFO - ===================================================
+#   <<app>> 2025-06-18 10:00:01 - __main__ - INFO - ============== AppX v1.0 a iniciar ===============
+#   <<app>> 2025-06-18 10:00:01 - __main__ - INFO - ===================================================
+#   <<app>> 2025-06-18 10:00:02 - __main__ - INFO - ---------------------------------------------------
+#   <<app>> 2025-06-18 10:00:02 - __main__ - INFO - ---------------- Processar PDFs ------------------
+#   <<app>> 2025-06-18 10:00:02 - __main__ - INFO - ---------------------------------------------------
+#   <<app>> 2025-06-18 10:00:03 - __main__ - DEBUG - ~~~~~~~~~~~~~~~~~ init_database() ~~~~~~~~~~~~~~~~~~
+#   <<app>> 2025-06-18 10:00:03 - __main__ - INFO - [pdf] A processar documento 1
+#   <<app>> 2025-06-18 10:00:04 - __main__ - INFO - [pdf] A processar documento 2
+#   <<app>> 2025-06-18 10:00:04 - __main__ - DEBUG - ---------------------------------------------------
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - [pdf] Documento 1 convertido com sucesso
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - [pdf] Documento 2 convertido com sucesso
+#   <<app>> 2025-06-18 10:00:05 - __main__ - DEBUG - [pdf] render_page() -> 0.12s
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------------------------------------------
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - | Resumo do processamento                         |
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - |-------------------------------------------------|
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - | Documentos processados  : 2                     |
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - | Sucesso                 : 2                     |
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - | Erros                   : 0                     |
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------------------------------------------
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - Processar PDFs concluído em 12.40s (2 documentos)
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------------------------------------------
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------- Fim Processar PDFs ---------------
+#   <<app>> 2025-06-18 10:00:05 - __main__ - INFO - ---------------------------------------------------
+#   <<app>> 2025-06-18 10:00:06 - __main__ - INFO - Aplicação concluída em 12.85s
+#   <<app>> 2025-06-18 10:00:06 - __main__ - INFO - ===================================================
+#   <<app>> 2025-06-18 10:00:06 - __main__ - INFO - ============== AppX v1.0 finalizado ===============
+#   <<app>> 2025-06-18 10:00:06 - __main__ - INFO - ===================================================
 #
 # -----------------------------------------------------------------
 # NOTAS PARA A AI
