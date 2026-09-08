@@ -1,0 +1,27 @@
+default:
+  parametro1: 0 #TODO: implemenatar
+ 
+
+
+modulo1.py:
+  parametro1_mod1:
+  - xpto.py
+  parametro2_mod1: "https://asasdasd.pt"
+  parametro3_mod1:
+    enabled: true
+  parametro4_mod1:
+    delay_between_requests_sec: 1.2
+
+# Logging (template: logging_component/logging_template.py)
+logging:
+  log_folder: "log_files"
+  log_file: "template.log"
+  log_prefix: "[nt]"
+  level: "INFO"
+  level_file: "INFO"
+  level_console: "INFO"
+  max_bytes: 10485760
+  max_records: 5000
+  max_backup: 10
+  file_ultra_debug: true
+  console_ultra_debug: true
