@@ -1,21 +1,69 @@
-"""logging_template.py — Configuração do sistema de logging.
+"""logging_template.py — Sistema de logging configurável via config.yaml.
 
-Este módulo disponibiliza uma configuração reutilizável de logging com:
-- Níveis configuráveis para ficheiro e consola (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- "Ultra debug mode": formato alargado para mensagens DEBUG (com ficheiro, função e linha)
-- Prefixo personalizado para fácil identificação das mensagens em logs agregados
-- Rotação automática de logs por tamanho e/ou número de registos
+Disponibiliza logger reutilizável com níveis independentes para ficheiro e
+consola, ultra debug mode (ficheiro/função/linha em DEBUG), prefixo
+personalizado e rotação automática por tamanho e/ou número de registos.
 
-Baseado em: https://github.com/nunoetome/my_python_starter_kit
+Características:
+    - Níveis configuráveis (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    - Formato ultra debug para mensagens DEBUG
+    - Prefixo personalizado para logs agregados
+    - Rotação automática (RotatingFileHandler) por tamanho e registos
+
+Configuração:
+    Parâmetros lidos de ``config/config.yaml`` secção ``logging`` via
+    ``config.config.get_config("logging")``. Fallback para constantes
+    locais se config ausente. Aceita ``dict`` explícito em
+    ``setup_logging(config=...)``.
+
+    Chaves suportadas: ``log_folder``, ``log_file``, ``log_prefix``,
+    ``level``, ``level_file``/``file_level``, ``level_console``/
+    ``console_level``, ``max_bytes``, ``max_records``, ``max_backup``,
+    ``file_ultra_debug``, ``console_ultra_debug``.
+
+Uso:
+    from logging_component.logging_template import setup_logging, logger
+
+    logger = setup_logging()
+    logger.info("Aplicação iniciada")
+    logger.debug("Detalhe com ultra debug")
+
+    # com config explícita
+    logger = setup_logging(config={"log_prefix": "[app]", "level": "DEBUG"})
+
+Notas:
+    - Instância global ``logger`` segue PEP 8 (minúsculas, não constante).
+    - ``LOGGER`` mantido como alias para retrocompatibilidade.
+    - Ficheiros com rotação ``app.log``, ``app_1.log`` ... ``app_N.log``.
+
+Referência:
+    https://github.com/nunoetome/my_python_starter_kit
 
 Changelog:
-- 2026-06-19 | Nuno Tomé | versão 2.1 — Adicionado livro de estilo de logs para AI e humanos
-- 2026-06-02 | Nuno Tomé | versão 2.0 — RotatingFileHandler, docstrings PEP 257, setup_logging()
-- 2025-01-22 | Nuno Tomé | implementação do UTF-8 na escrita dos ficheiros de log
+    - 2026-09-04 | Nuno Tomé | 2.2 — Config via config.yaml, logger minúsculas
+    - 2026-06-19 | Nuno Tomé | 2.1 — Livro de estilo de logs para AI e humanos
+    - 2026-06-02 | Nuno Tomé | 2.0 — RotatingFileHandler, PEP 257, setup_logging()
+    - 2025-01-22 | Nuno Tomé | 1.0 — UTF-8 na escrita dos ficheiros de log
 """
 
 import logging
 import os
+
+try:
+    from config.config import CONFIG_YAML as _CONFIG_YAML
+    from config.config import get_config as _get_config
+except ImportError:
+    import sys as _sys
+    from pathlib import Path as _Path
+    try:
+        _root = _Path(__file__).resolve().parent.parent
+        if str(_root) not in _sys.path:
+            _sys.path.insert(0, str(_root))
+        from config.config import CONFIG_YAML as _CONFIG_YAML
+        from config.config import get_config as _get_config
+    except ImportError:
+        _CONFIG_YAML = {}
+        _get_config = None
 
 
 # --- Configuração de níveis ------------------------------------------------
@@ -57,7 +105,43 @@ LOG_MAX_BACKUP = 10      # número máximo de ficheiros de arquivo
 # ---------------------------------------------------------------------------
 
 
-LOGGER = logging.getLogger(__name__)
+_LEVEL_MAP = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+    "NOTSET": logging.NOTSET,
+}
+
+
+def _parse_level(value, default):
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return _LEVEL_MAP.get(value.upper(), default)
+    return default
+
+
+def _resolve_logging_config(explicit=None):
+    if isinstance(explicit, dict) and explicit:
+        return explicit
+    if _get_config is not None:
+        try:
+            cfg = _get_config("logging")
+            if isinstance(cfg, dict) and cfg:
+                return cfg
+        except ValueError:
+            pass
+    if isinstance(_CONFIG_YAML, dict):
+        cfg = _CONFIG_YAML.get("logging")
+        if isinstance(cfg, dict):
+            return cfg
+    return {}
+
+
+logger = logging.getLogger(__name__)
+LOGGER = logger
 
 
 class RotatingFileHandler(logging.Handler):
@@ -155,69 +239,90 @@ class RotatingFileHandler(logging.Handler):
         super().close()
 
 
-def ini_logging():
+def ini_logging(config=None):
     """[LEGACY] Configura e devolve o logger da aplicação.
 
     Mantida apenas para retrocompatibilidade. Para novos desenvolvimentos
     use :func:`setup_logging`.
-    """
-    if LOGGER.hasHandlers():
-        LOGGER.handlers.clear()
-    LOGGER.setLevel(LOG_LEVEL_GLOBAL)
 
-    # FILE HANDLER
+    Args:
+        config: dict opcional com chaves de ``config.yaml:logging``.
+            Se None, tenta carregar via ``config.get_config("logging")``
+            e cai para constantes deste módulo.
+    """
+    cfg = _resolve_logging_config(config)
+    log_folder = cfg.get("log_folder", LOG_FOLDER)
+    log_file = cfg.get("log_file", os.path.basename(LOG_OUTPUT_FILE))
+    log_prefix = cfg.get("log_prefix", LOG_OUTPUT_PREFIX)
+    log_level_global = _parse_level(cfg.get("level", LOG_LEVEL_GLOBAL), LOG_LEVEL_GLOBAL)
+    log_level_file = _parse_level(cfg.get("level_file", cfg.get("file_level", LOG_LEVEL_FILE)), LOG_LEVEL_FILE)
+    log_level_console = _parse_level(cfg.get("level_console", cfg.get("console_level", LOG_LEVEL_CONSOLE)), LOG_LEVEL_CONSOLE)
+    log_max_bytes = int(cfg.get("max_bytes", LOG_MAX_BYTES))
+    log_max_records = int(cfg.get("max_records", LOG_MAX_RECORDS))
+    log_max_backup = int(cfg.get("max_backup", LOG_MAX_BACKUP))
+    file_ultra = bool(cfg.get("file_ultra_debug", FILE_ULTRA_DEBUG))
+    console_ultra = bool(cfg.get("console_ultra_debug", CONSOLE_ULTRA_DEBUG))
+    log_output_file = os.path.join(log_folder, log_file)
+    log_format_file = log_prefix + ' %(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    log_format_console = log_prefix + ' %(levelname)s - %(message)s'
+    log_format_file_ultra = log_format_file + ' - [%(filename)s - %(funcName)s - %(lineno)d]'
+    log_format_console_ultra = log_format_console + ' - [%(filename)s - %(funcName)s - %(lineno)d]'
+
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    logger.setLevel(log_level_global)
+
     file_handler = RotatingFileHandler(
-        LOG_OUTPUT_FILE,
+        log_output_file,
         mode="a",
         encoding="utf-8",
-        max_bytes=LOG_MAX_BYTES,
-        max_records=LOG_MAX_RECORDS,
-        max_backup=LOG_MAX_BACKUP,
+        max_bytes=log_max_bytes,
+        max_records=log_max_records,
+        max_backup=log_max_backup,
     )
-    file_handler.setLevel(LOG_LEVEL_FILE)
+    file_handler.setLevel(log_level_file)
 
-    if FILE_ULTRA_DEBUG:
+    if file_ultra:
         class CustomDebugFormatteFile(logging.Formatter):
             def format(self, record):
                 if record.levelno == logging.DEBUG:
-                    self._style._fmt = LOG_FORMAT_FILE_ULTRA_DEBUG
+                    self._style._fmt = log_format_file_ultra
                 else:
-                    self._style._fmt = LOG_FORMAT_FILE
+                    self._style._fmt = log_format_file
                 return super().format(record)
         file_handler.setFormatter(CustomDebugFormatteFile())
     else:
-        file_handler.setFormatter(logging.Formatter(LOG_FORMAT_FILE))
+        file_handler.setFormatter(logging.Formatter(log_format_file))
 
-    LOGGER.addHandler(file_handler)
+    logger.addHandler(file_handler)
 
-    # CONSOLE HANDLER
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(LOG_LEVEL_CONSOLE)
+    console_handler.setLevel(log_level_console)
 
-    if CONSOLE_ULTRA_DEBUG:
+    if console_ultra:
         class CustomDebugFormatter(logging.Formatter):
             def format(self, record):
                 if record.levelno == logging.DEBUG:
-                    self._style._fmt = LOG_FORMAT_CONSOLE_ULTRA_DEBUG
+                    self._style._fmt = log_format_console_ultra
                 else:
-                    self._style._fmt = LOG_FORMAT_CONSOLE
+                    self._style._fmt = log_format_console
                 return super().format(record)
         console_handler.setFormatter(CustomDebugFormatter())
     else:
-        console_handler.setFormatter(logging.Formatter(LOG_FORMAT_CONSOLE))
+        console_handler.setFormatter(logging.Formatter(log_format_console))
 
-    LOGGER.addHandler(console_handler)
+    logger.addHandler(console_handler)
 
-    return LOGGER
+    return logger
 
 
-def setup_logging():
+def setup_logging(config=None):
     """Configura e devolve o logger da aplicação.
 
     Wrapper que chama :func:`ini_logging` para garantir
     retrocompatibilidade.
     """
-    return ini_logging()
+    return ini_logging(config=config)
 
 
 # =================================================================
@@ -278,9 +383,9 @@ def setup_logging():
 #     ===================================================
 #
 #   Code:
-#     LOGGER.info("=" * 49)
-#     LOGGER.info(f"{' AppX v1.0 a iniciar ':=^49}")
-#     LOGGER.info("=" * 49)
+#     logger.info("=" * 49)
+#     logger.info(f"{' AppX v1.0 a iniciar ':=^49}")
+#     logger.info("=" * 49)
 #
 # -----------------------------------------------------------------
 # STYLE 2: BANNER_APP_END
@@ -299,9 +404,9 @@ def setup_logging():
 #     ===================================================
 #
 #   Code:
-#     LOGGER.info("=" * 49)
-#     LOGGER.info(f"{' AppX v1.0 finalizado ':=^49}")
-#     LOGGER.info("=" * 49)
+#     logger.info("=" * 49)
+#     logger.info(f"{' AppX v1.0 finalizado ':=^49}")
+#     logger.info("=" * 49)
 #
 # -----------------------------------------------------------------
 # STYLE 3: BANNER_SECTION_START
@@ -320,9 +425,9 @@ def setup_logging():
 #     ---------------------------------------------------
 #
 #   Code:
-#     LOGGER.info("-" * 49)
-#     LOGGER.info(f"{' Processar PDFs ':-^49}")
-#     LOGGER.info("-" * 49)
+#     logger.info("-" * 49)
+#     logger.info(f"{' Processar PDFs ':-^49}")
+#     logger.info("-" * 49)
 #
 # -----------------------------------------------------------------
 # STYLE 4: BANNER_SECTION_END
@@ -340,9 +445,9 @@ def setup_logging():
 #     ---------------------------------------------------
 #
 #   Code:
-#     LOGGER.info("-" * 49)
-#     LOGGER.info(f"{' Fim Processar PDFs ':-^49}")
-#     LOGGER.info("-" * 49)
+#     logger.info("-" * 49)
+#     logger.info(f"{' Fim Processar PDFs ':-^49}")
+#     logger.info("-" * 49)
 #
 # -----------------------------------------------------------------
 # STYLE 5: BANNER_FUNCTION
@@ -361,7 +466,7 @@ def setup_logging():
 #     ~~~~~~~~~~~~~~~~~ init_database() ~~~~~~~~~~~~~~~~~~
 #
 #   Code:
-#     LOGGER.debug(f"{' init_database() ':~^49}")
+#     logger.debug(f"{' init_database() ':~^49}")
 #
 # -----------------------------------------------------------------
 # STYLE 6: TAG
@@ -384,12 +489,12 @@ def setup_logging():
 #     [api] POST /invoice -> 201 Created
 #
 #   Code:
-#     LOGGER.info("[pdf] A processar documento %d", doc_id)
-#     LOGGER.info("[pdf] Documento %d convertido com sucesso", doc_id)
-#     LOGGER.info("[db] Ligação à base de dados estabelecida")
-#     LOGGER.info("[db] Query executada em %.2fs", elapsed)
-#     LOGGER.info("[api] GET /users -> 200 OK")
-#     LOGGER.info("[api] POST /invoice -> 201 Created")
+#     logger.info("[pdf] A processar documento %d", doc_id)
+#     logger.info("[pdf] Documento %d convertido com sucesso", doc_id)
+#     logger.info("[db] Ligação à base de dados estabelecida")
+#     logger.info("[db] Query executada em %.2fs", elapsed)
+#     logger.info("[api] GET /users -> 200 OK")
+#     logger.info("[api] POST /invoice -> 201 Created")
 #
 # -----------------------------------------------------------------
 # STYLE 7: SEPARATOR
@@ -406,7 +511,7 @@ def setup_logging():
 #     ---------------------------------------------------
 #
 #   Code:
-#     LOGGER.debug("-" * 49)
+#     logger.debug("-" * 49)
 #
 # -----------------------------------------------------------------
 # STYLE 8: BOX
@@ -442,7 +547,7 @@ def setup_logging():
 #         "| Tempo total             : 12.4s                 |",
 #     ]
 #     for line in lines:
-#         LOGGER.info(line)
+#         logger.info(line)
 #     # Nota: as bordas superior e inferior podem ser geradas
 #     # com SEPARATOR se o alinhamento com '|' não for crítico,
 #     # ou construídas manualmente para corresponder à largura
@@ -470,7 +575,7 @@ def setup_logging():
 #   Code:
 #     t_app_start = time.perf_counter()
 #     # ... toda a lógica da aplicação ...
-#     LOGGER.info("Aplicação concluída em %.2fs", time.perf_counter() - t_app_start)
+#     logger.info("Aplicação concluída em %.2fs", time.perf_counter() - t_app_start)
 #
 #   --- VARIANT B: TIMING_SECTION ---
 #   Usage:    Tempo de execução de uma sub-secção. Colocar
@@ -483,7 +588,7 @@ def setup_logging():
 #   Code:
 #     t_sec = time.perf_counter()
 #     # ... sub-processo ...
-#     LOGGER.info("Processar PDFs concluído em %.2fs (%d docs)", time.perf_counter() - t_sec, count)
+#     logger.info("Processar PDFs concluído em %.2fs (%d docs)", time.perf_counter() - t_sec, count)
 #
 #   --- VARIANT C: TIMING_FUNCTION ---
 #   Usage:    Tempo de uma função específica ou bloco de código
@@ -500,9 +605,9 @@ def setup_logging():
 #   Code:
 #     t = time.perf_counter()
 #     result = init_database()
-#     LOGGER.debug("init_database() -> %.2fs", time.perf_counter() - t)
+#     logger.debug("init_database() -> %.2fs", time.perf_counter() - t)
 #     # combinado com TAG:
-#     LOGGER.debug("[pdf] render_page() -> %.2fs", time.perf_counter() - t)
+#     logger.debug("[pdf] render_page() -> %.2fs", time.perf_counter() - t)
 #
 # -----------------------------------------------------------------
 # EXEMPLO COMPLETO DE APLICAÇÃO DOS ESTILOS
@@ -566,3 +671,31 @@ def setup_logging():
 #     NUNCA converter para ms/µs — ficar sempre em centésimas de
 #     segundo com %.2fs.
 # =================================================================
+
+# Exemplo de uso
+def main():
+    import time
+    log = setup_logging()
+    t_app = time.perf_counter()
+    log.info("=" * 49)
+    log.info(f"{' logging_template a iniciar ':=^49}")
+    log.info("=" * 49)
+    log.info("-" * 49)
+    log.info(f"{' Exemplo Seccao ':-^49}")
+    log.info("-" * 49)
+    log.info("[demo] Mensagem INFO com prefixo do config.yaml")
+    log.debug("[demo] Mensagem DEBUG com ultra debug")
+    log.debug(f"{' main() ':~^49}")
+    time.sleep(0.05)
+    log.info("Exemplo Seccao concluido em %.2fs", time.perf_counter() - t_app)
+    log.info("-" * 49)
+    log.info(f"{' Fim Exemplo Seccao ':-^49}")
+    log.info("-" * 49)
+    log.info("Aplicacao concluida em %.2fs", time.perf_counter() - t_app)
+    log.info("=" * 49)
+    log.info(f"{' logging_template finalizado ':=^49}")
+    log.info("=" * 49)
+
+
+if __name__ == "__main__":
+    main()
